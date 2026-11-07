@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import os
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
@@ -28,23 +29,40 @@ if uploaded_file is not None:
         X_test = data.drop(columns=['target'])
         y_test = data['target']
         
-        # Model selection dropdown
         st.subheader("2. Model Selection")
         model_name = st.selectbox(
             "Select Classifier:", 
             ["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "Support Vector Machine"]
         )
         
-        model_paths = {
-            "Logistic Regression": "model/lr_model.joblib",
-            "Decision Tree": "model/dt_model.joblib",
-            "KNN": "model/knn_model.joblib",
-            "Naive Bayes": "model/nb_model.joblib",
-            "Support Vector Machine": "model/svm_model.joblib"
+        # File mapping
+        filename_map = {
+            "Logistic Regression": "lr_model.joblib",
+            "Decision Tree": "dt_model.joblib",
+            "KNN": "knn_model.joblib",
+            "Naive Bayes": "nb_model.joblib",
+            "Support Vector Machine": "svm_model.joblib"
         }
         
-        try:
-            model = joblib.load(model_paths[model_name])
+        target_file = filename_map[model_name]
+        
+        # Dynamic path resolution: checks model/ directory, root, and absolute paths
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        possible_paths = [
+            os.path.join(base_dir, "model", target_file),
+            os.path.join(base_dir, target_file),
+            os.path.join("model", target_file),
+            target_file
+        ]
+        
+        model_path = None
+        for p in possible_paths:
+            if os.path.exists(p):
+                model_path = p
+                break
+        
+        if model_path is not None:
+            model = joblib.load(model_path)
             st.success(f"{model_name} loaded successfully!")
             
             # Predict
@@ -55,7 +73,7 @@ if uploaded_file is not None:
             except Exception:
                 auc_val = None
 
-            # Display evaluation metrics
+            # Evaluation metrics
             st.subheader("3. Evaluation Metrics")
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             c1.metric("Accuracy", f"{accuracy_score(y_test, y_pred):.4f}")
@@ -82,8 +100,8 @@ if uploaded_file is not None:
                 st.write("**Classification Report**")
                 report_dict = classification_report(y_test, y_pred, output_dict=True)
                 st.dataframe(pd.DataFrame(report_dict).transpose())
-                
-        except FileNotFoundError:
-            st.error(f"Could not find model file at {model_paths[model_name]}. Ensure the 'model/' folder exists in the repository.")
+        else:
+            st.error(f"Could not find `{target_file}` anywhere in your repository.")
+            st.write("Files currently visible in app root:", os.listdir(base_dir))
 else:
     st.info("Please upload `test_data.csv` to proceed.")
